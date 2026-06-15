@@ -1,0 +1,30 @@
+# секреты
+.env
+
+# окружение
+venv/
+env/
+.venv/
+__pycache__/
+*.pyc
+
+# данные
+data/*.csv
+data/*.parquet
+
+# модели и артефакты
+*.bin
+models/
+mlruns/
+mlflow.db
+mlartifacts/
+catboost_info/
+
+# jupyter
+.ipynb_checkpoints/
+
+# airflow
+airflow/logs/
+airflow.db
+airflow.cfg
+webserver_config.py
