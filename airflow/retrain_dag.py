@@ -1,8 +1,3 @@
-"""
-DAG дообучения ALS-модели рекомендаций RetailRocket.
-Запускается еженедельно: забирает данные из S3, переобучает модель,
-сохраняет артефакты обратно в S3 и логирует метрики в MLflow.
-"""
 import os
 import pickle
 import logging
@@ -18,20 +13,19 @@ from airflow.utils.dates import days_ago
 
 log = logging.getLogger(__name__)
 
-# настройки из env (в Airflow задаются через Admin → Variables или .env)
-S3_BUCKET  = os.environ.get('S3_BUCKET_NAME', '')
-AWS_KEY    = os.environ.get('AWS_ACCESS_KEY_ID', '')
-AWS_SEC    = os.environ.get('AWS_SECRET_ACCESS_KEY', '')
-DB_USER    = os.environ.get('DB_DESTINATION_USER', '')
-DB_PASS    = os.environ.get('DB_DESTINATION_PASSWORD', '')
-DB_HOST    = os.environ.get('DB_DESTINATION_HOST', '')
-DB_PORT    = os.environ.get('DB_DESTINATION_PORT', '6432')
-DB_NAME    = os.environ.get('DB_DESTINATION_NAME', '')
+S3_BUCKET = os.environ.get('S3_BUCKET_NAME', '')
+AWS_KEY = os.environ.get('AWS_ACCESS_KEY_ID', '')
+AWS_SEC = os.environ.get('AWS_SECRET_ACCESS_KEY', '')
+DB_USER = os.environ.get('DB_DESTINATION_USER', '')
+DB_PASS = os.environ.get('DB_DESTINATION_PASSWORD', '')
+DB_HOST = os.environ.get('DB_DESTINATION_HOST', '')
+DB_PORT = os.environ.get('DB_DESTINATION_PORT', '6432')
+DB_NAME = os.environ.get('DB_DESTINATION_NAME', '')
 
-S3_ENDPOINT  = 'https://storage.yandexcloud.net'
-DATA_PREFIX  = 'data/'
+S3_ENDPOINT = 'https://storage.yandexcloud.net'
+DATA_PREFIX = 'data/'
 MODEL_PREFIX = 'models/'
-TMP_DIR      = '/tmp/retailrocket_retrain'
+TMP_DIR = '/tmp/retailrocket_retrain'
 
 ALS_PARAMS = dict(factors=64, iterations=15, regularization=0.01, random_state=42)
 WEIGHTS    = {'addtocart': 2, 'transaction': 3}
@@ -162,7 +156,6 @@ def retrain_dag():
 
     @task
     def upload_models(paths: dict):
-        """Загружаем обновлённые модели в S3."""
         s3 = get_s3()
         for fname, local_path in paths.items():
             s3.upload_file(local_path, S3_BUCKET, f'{MODEL_PREFIX}{fname}')

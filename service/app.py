@@ -16,9 +16,9 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(mess
 log = logging.getLogger(__name__)
 
 MODELS_DIR = os.path.join(os.path.dirname(__file__), '..', 'models')
-S3_BUCKET  = os.environ.get('S3_BUCKET_NAME', '')
-AWS_KEY    = os.environ.get('AWS_ACCESS_KEY_ID', '')
-AWS_SEC    = os.environ.get('AWS_SECRET_ACCESS_KEY', '')
+S3_BUCKET = os.environ.get('S3_BUCKET_NAME', '')
+AWS_KEY = os.environ.get('AWS_ACCESS_KEY_ID', '')
+AWS_SEC = os.environ.get('AWS_SECRET_ACCESS_KEY', '')
 
 
 def load_pickle(path: str):
@@ -27,7 +27,6 @@ def load_pickle(path: str):
 
 
 def download_from_s3(fname: str):
-    """Скачиваем файл из S3 если нет локально."""
     local = os.path.join(MODELS_DIR, fname)
     if os.path.exists(local):
         return local
@@ -43,7 +42,6 @@ def download_from_s3(fname: str):
     return local
 
 
-# глобальные артефакты
 state: dict = {}
 
 
@@ -53,15 +51,14 @@ async def lifespan(app: FastAPI):
     for fname in ['als_model.pkl', 'similar_items.pkl', 'mappings.pkl', 'popular_items.pkl']:
         download_from_s3(fname)
 
-    state['als']      = load_pickle(os.path.join(MODELS_DIR, 'als_model.pkl'))
-    state['similar']  = load_pickle(os.path.join(MODELS_DIR, 'similar_items.pkl'))
-    mappings          = load_pickle(os.path.join(MODELS_DIR, 'mappings.pkl'))
+    state['als'] = load_pickle(os.path.join(MODELS_DIR, 'als_model.pkl'))
+    state['similar'] = load_pickle(os.path.join(MODELS_DIR, 'similar_items.pkl'))
+    mappings = load_pickle(os.path.join(MODELS_DIR, 'mappings.pkl'))
     state['user2idx'] = mappings['user2idx']
     state['item2idx'] = mappings['item2idx']
     state['idx2item'] = mappings['idx2item']
-    state['popular']  = load_pickle(os.path.join(MODELS_DIR, 'popular_items.pkl'))
+    state['popular'] = load_pickle(os.path.join(MODELS_DIR, 'popular_items.pkl'))
 
-    # строим sparse матрицу нулевого размера — нужна для als.recommend
     import scipy.sparse as sp
     n_users = len(state['user2idx'])
     n_items = len(state['item2idx'])
@@ -89,18 +86,16 @@ def health():
 
 @app.post('/events')
 def add_event(body: EventIn):
-    """Принимаем событие (для логирования; онлайн-обновление матрицы не реализовано)."""
     log.info('event: visitor=%s item=%s type=%s', body.visitor_id, body.item_id, body.event)
     return {'status': 'ok'}
 
 
 @app.get('/recommendations/{visitor_id}')
 def recommendations(visitor_id: int, k: int = 10):
-    """Персональные рекомендации. Если пользователь холодный — топ популярных."""
-    als       = state['als']
-    user2idx  = state['user2idx']
-    idx2item  = state['idx2item']
-    popular   = state['popular']
+    als = state['als']
+    user2idx = state['user2idx']
+    idx2item = state['idx2item']
+    popular = state['popular']
     user_item = state['user_item']
 
     if visitor_id not in user2idx:
@@ -116,10 +111,9 @@ def recommendations(visitor_id: int, k: int = 10):
 
 @app.get('/similar/{item_id}')
 def similar_items(item_id: int, k: int = 10):
-    """Похожие товары (i2i)."""
     item2idx = state['item2idx']
     idx2item = state['idx2item']
-    similar  = state['similar']
+    similar = state['similar']
 
     if item_id not in item2idx:
         raise HTTPException(status_code=404, detail='item not found')
