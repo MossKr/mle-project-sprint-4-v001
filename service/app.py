@@ -100,12 +100,12 @@ def recommendations(visitor_id: int, k: int = 10):
 
     if visitor_id not in user2idx:
         log.info('cold start for visitor %s', visitor_id)
-        recs = [idx2item[i] for i in popular[:k]]
+        recs = [int(idx2item[i]) for i in popular[:k]]
         return {'visitor_id': visitor_id, 'recommendations': recs, 'source': 'top_popular'}
 
     uidx = user2idx[visitor_id]
     ids, _ = als.recommend(uidx, user_item[uidx], N=k, filter_already_liked_items=True)
-    recs = [idx2item[i] for i in ids.tolist()]
+    recs = [int(idx2item[i]) for i in ids.tolist()]
     return {'visitor_id': visitor_id, 'recommendations': recs, 'source': 'als'}
 
 
@@ -120,7 +120,7 @@ def similar_items(item_id: int, k: int = 10):
 
     iidx = item2idx[item_id]
     sim_idx = similar.get(iidx, [])[:k]
-    return {'item_id': item_id, 'similar_items': [idx2item[i] for i in sim_idx]}
+    return {'item_id': item_id, 'similar_items': [int(idx2item[i]) for i in sim_idx]}
 
 
 if __name__ == '__main__':
