@@ -28,7 +28,7 @@ MODEL_PREFIX = 'models/'
 TMP_DIR = '/tmp/retailrocket_retrain'
 
 ALS_PARAMS = dict(factors=64, iterations=15, regularization=0.01, random_state=42)
-WEIGHTS    = {'addtocart': 2, 'transaction': 3}
+WEIGHTS = {'addtocart': 2, 'transaction': 3}
 
 
 def get_s3():
@@ -51,7 +51,6 @@ def retrain_dag():
 
     @task
     def download_data():
-        """Скачиваем events.csv из S3 в /tmp."""
         os.makedirs(TMP_DIR, exist_ok=True)
         s3 = get_s3()
         local = os.path.join(TMP_DIR, 'events.csv')
@@ -61,7 +60,6 @@ def retrain_dag():
 
     @task
     def train_model(events_path: str):
-        """Обучаем ALS, строим i2i, возвращаем путь к артефактам."""
         events = pd.read_csv(events_path)
         events['timestamp'] = pd.to_datetime(events['timestamp'], unit='ms')
 
@@ -70,14 +68,14 @@ def retrain_dag():
         pos = pos.sort_values('timestamp')
 
         user_cnt = pos.groupby('visitorid').size()
-        active   = user_cnt[user_cnt >= 2].index
-        pos      = pos[pos['visitorid'].isin(active)]
+        active = user_cnt[user_cnt >= 2].index
+        pos = pos[pos['visitorid'].isin(active)]
 
-        user_ids  = pos['visitorid'].unique()
-        item_ids  = pos['itemid'].unique()
-        user2idx  = {u: i for i, u in enumerate(user_ids)}
-        item2idx  = {it: i for i, it in enumerate(item_ids)}
-        idx2item  = {i: it for it, i in item2idx.items()}
+        user_ids = pos['visitorid'].unique()
+        item_ids = pos['itemid'].unique()
+        user2idx = {u: i for i, u in enumerate(user_ids)}
+        item2idx = {it: i for i, it in enumerate(item_ids)}
+        idx2item = {i: it for it, i in item2idx.items()}
 
         pos['uidx'] = pos['visitorid'].map(user2idx)
         pos['iidx'] = pos['itemid'].map(item2idx)
@@ -85,10 +83,9 @@ def retrain_dag():
         N_USERS = len(user_ids)
         N_ITEMS = len(item_ids)
 
-        # train/test split
-        test_idx  = pos.groupby('uidx')['timestamp'].idxmax()
-        test      = pos.loc[test_idx]
-        train     = pos.drop(index=test_idx)
+        test_idx = pos.groupby('uidx')['timestamp'].idxmax()
+        test = pos.loc[test_idx]
+        train = pos.drop(index=test_idx)
 
         matrix = sp.csr_matrix(
             (train['weight'].values.astype(np.float32),
@@ -99,7 +96,6 @@ def retrain_dag():
         als = AlternatingLeastSquares(**ALS_PARAMS)
         als.fit(matrix)
 
-        # метрики
         def recall_at_k(actual, recs, k=10):
             return len(set(actual) & set(recs[:k])) / len(set(actual)) if actual else 0.0
 
@@ -111,7 +107,6 @@ def retrain_dag():
         recall = float(np.mean(recalls))
         log.info('recall@10 = %.4f', recall)
 
-        # i2i
         norms = np.linalg.norm(als.item_factors, axis=1, keepdims=True)
         norms[norms == 0] = 1
         normed = als.item_factors / norms
@@ -120,20 +115,19 @@ def retrain_dag():
         for start in range(0, N_ITEMS, BATCH):
             end = min(start + BATCH, N_ITEMS)
             sims = normed[start:end] @ normed.T
-            sims[:, start:end] -= np.eye(end - start, N_ITEMS - start) * 2
+            batch_size = end - start
+            sims[np.arange(batch_size), np.arange(start, end)] = -1
             top = np.argsort(-sims, axis=1)[:, :20]
             for i, iidx in enumerate(range(start, end)):
                 similar_items[iidx] = top[i].tolist()
 
-        # топ популярных
         pop_list = train.groupby('iidx')['weight'].sum().sort_values(ascending=False).index.tolist()
 
-        # сохраняем артефакты
         artifacts = {
-            'als_model.pkl':      als,
-            'similar_items.pkl':  similar_items,
-            'popular_items.pkl':  pop_list[:200],
-            'mappings.pkl':       {'user2idx': user2idx, 'item2idx': item2idx, 'idx2item': idx2item},
+            'als_model.pkl': als,
+            'similar_items.pkl': similar_items,
+            'popular_items.pkl': pop_list[:200],
+            'mappings.pkl': {'user2idx': user2idx, 'item2idx': item2idx, 'idx2item': idx2item},
         }
         os.makedirs(TMP_DIR, exist_ok=True)
         paths = {}
@@ -143,7 +137,6 @@ def retrain_dag():
                 pickle.dump(obj, f)
             paths[fname] = p
 
-        # mlflow
         mlflow.set_tracking_uri(f'postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}')
         mlflow.set_experiment('retailrocket_recsys')
         with mlflow.start_run(run_name='als_retrain'):
@@ -162,7 +155,7 @@ def retrain_dag():
             log.info('uploaded %s', fname)
 
     events_path = download_data()
-    paths       = train_model(events_path)
+    paths = train_model(events_path)
     upload_models(paths)
 
 
